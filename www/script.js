@@ -3,11 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const myPlayerId = urlParams.get('player') || 'player1';
     document.getElementById('player-id').textContent = myPlayerId;
 
-    const API_URL = 'http://localhost:8889'; // Sesuaikan port dengan server Anda
+    const API_URL = 'http://localhost:8889';
 
-    let selectedCardsState = [];
-    let isPolling = false; 
-    let currentTurnFromServer = null;
+    let isPolling = false;
 
     // Fungsi untuk mengambil state game dari server
     async function getGameState() {
@@ -16,117 +14,120 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error('Failed to get game state');
             const state = await response.json();
             updateUI(state);
-            // ================== PERBAIKAN KUNCI ==================
-            // Kembalikan 'state' agar fungsi lain yang memanggil bisa menggunakannya.
             return state;
-            // =======================================================
         } catch (error) {
             console.error('Error fetching game state:', error);
-            // Kembalikan null jika terjadi error agar tidak crash
             return null;
         }
     }
 
     // Fungsi untuk memperbarui tampilan UI berdasarkan state
     function updateUI(state) {
-        // Tambahkan pengecekan jika state null
         if (!state) {
             console.log("Skipping UI update due to no state.");
             return;
         }
 
-        const isMyTurn = state.current_turn === myPlayerId;
-        console.log("--- Updating UI ---");
-        console.log("Data dari Server (state.current_turn):", state.current_turn);
-        console.log("ID Player dari URL (myPlayerId):", myPlayerId);
-        console.log("Apakah ini giliran saya? (isMyTurn):", isMyTurn);
-        
-        if (!state.game_started || state.game_winner) {
-            document.getElementById('actions').style.display = 'none';
-            document.getElementById('start-game-button').style.display = 'block';
-
-            if (state.game_winner) {
-                document.getElementById('game-log').innerHTML = `<li><b>Winner is ${state.game_winner}!</b></li>`;
-                document.getElementById('start-game-button').style.display = 'none';
-            }
-            return;
-        }
-
-        document.getElementById('start-game-button').style.display = 'none';
-        document.getElementById('actions').style.display = 'block';
-
-        document.getElementById('ref-card').textContent = state.reference_card;
-        document.getElementById('pile-count').textContent = state.card_pile_count;
-        document.getElementById('current-turn').textContent = state.current_turn;
-
-        const myHandDiv = document.getElementById('my-hand');
-        myHandDiv.innerHTML = '';
-        state.your_hand.forEach(card => {
-            const cardDiv = document.createElement('div');
-            cardDiv.className = 'card';
-            cardDiv.textContent = card;
-            cardDiv.dataset.cardName = card;
-            if (selectedCardsState.includes(card)) {
-                cardDiv.classList.add('selected');
-            }
-            cardDiv.addEventListener('click', () => {
-                if (isMyTurn){
-                    const cardName = cardDiv.dataset.cardName;
-                    if (selectedCardsState.includes(cardName)) {
-                        selectedCardsState = selectedCardsState.filter(c => c !== cardName);
-                        cardDiv.classList.remove('selected');
-                    } else {
-                        selectedCardsState.push(cardName);
-                        cardDiv.classList.add('selected');
-                    }
-                    console.log("Kartu dipilih:", selectedCardsState);
-                }
-            });
-            myHandDiv.appendChild(cardDiv);
-        });
-        
+        // --- AWAL PERUBAHAN LOGIKA ---
+        // 1. Render panel lawan di luar kondisi utama agar selalu diperbarui.
         const opponentsDiv = document.getElementById('opponents');
         opponentsDiv.innerHTML = '';
-        for (const [id, count] of Object.entries(state.all_players_card_count)) {
-            if (id !== myPlayerId) {
-                const isEliminated = state.players_eliminated.includes(id);
-                opponentsDiv.innerHTML += `<p>${id}: ${count} cards ${isEliminated ? '(ELIMINATED)' : ''}</p>`;
+        if (state.all_players_card_count) {
+            for (const [id, count] of Object.entries(state.all_players_card_count)) {
+                if (id !== myPlayerId) {
+                    const isEliminated = state.players_eliminated && state.players_eliminated.includes(id);
+                    const isWinner = id === state.game_winner;
+                    
+                    let status = '';
+                    if (isWinner) {
+                        status = '(WINNER)';
+                    } else if (isEliminated) {
+                        status = '(ELIMINATED)';
+                    }
+                    
+                    opponentsDiv.innerHTML += `<p>${id}: ${count} cards ${status}</p>`;
+                }
             }
         }
-        
+        // --- AKHIR PERUBAHAN LOGIKA ---
+
+        const isMyTurn = state.current_turn === myPlayerId;
+        const startButton = document.getElementById('start-game-button');
         const logUl = document.getElementById('game-log');
-        logUl.innerHTML = '';
-        state.log.forEach(msg => {
-            logUl.innerHTML += `<li>${msg}</li>`;
-        });
-        
-        document.getElementById('play-button').disabled = !isMyTurn;
-        document.getElementById('challenge-button').disabled = !isMyTurn || state.card_pile_count === 0;
+
+        // 2. Mengatur UI berdasarkan status permainan (tanpa 'return' prematur)
+        if (!state.game_started || state.game_winner) {
+            document.getElementById('actions').style.display = 'none';
+
+            if (state.game_winner) {
+                // Game Over
+                logUl.innerHTML = `<li><b>Winner is ${state.game_winner}! Game Over.</b></li>`;
+                if (myPlayerId === 'player1') {
+                    startButton.textContent = 'Play New Game';
+                    startButton.style.display = 'block';
+                } else {
+                    startButton.style.display = 'none';
+                }
+                document.getElementById('my-hand').innerHTML = ''; // Kosongkan tangan
+                document.getElementById('current-turn').textContent = 'Game Over';
+            } else {
+                // Sebelum game dimulai
+                logUl.innerHTML = '<li>Game has not started.</li>';
+                if (myPlayerId === 'player1') {
+                    startButton.textContent = 'Start New Game';
+                    startButton.style.display = 'block';
+                } else {
+                    startButton.style.display = 'none';
+                }
+            }
+        } else {
+            // Game sedang berjalan
+            startButton.style.display = 'none';
+            document.getElementById('actions').style.display = 'block';
+
+            document.getElementById('ref-card').textContent = state.reference_card;
+            document.getElementById('pile-count').textContent = state.card_pile_count;
+            document.getElementById('current-turn').textContent = state.current_turn;
+
+            const myHandDiv = document.getElementById('my-hand');
+            myHandDiv.innerHTML = '';
+            state.your_hand.forEach(card => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'card';
+                cardDiv.textContent = card;
+                cardDiv.dataset.cardName = card;
+                cardDiv.addEventListener('click', () => {
+                    if (isMyTurn) {
+                        cardDiv.classList.toggle('selected');
+                    }
+                });
+                myHandDiv.appendChild(cardDiv);
+            });
+
+            logUl.innerHTML = '';
+            state.log.forEach(msg => {
+                logUl.innerHTML += `<li>${msg}</li>`;
+            });
+
+            document.getElementById('play-button').disabled = !isMyTurn;
+            document.getElementById('challenge-button').disabled = !isMyTurn || state.card_pile_count === 0;
+        }
     }
 
     async function pollGameState() {
-        if (isPolling || currentTurnFromServer === myPlayerId) {
-            return;
-        }
-
+        if (isPolling) return;
         isPolling = true;
-        console.log("Polling started...");
 
         while (true) {
             const state = await getGameState();
-            
-            // Dengan perbaikan di getGameState, 'state' sekarang tidak akan undefined
             if (!state || state.game_winner || state.current_turn === myPlayerId) {
-                break; 
+                break;
             }
-            await new Promise(resolve => setTimeout(resolve, 2000)); 
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
-
-        console.log("Polling stopped. It's my turn or game is over.");
         isPolling = false;
     }
 
-    // Aksi tombol
     document.getElementById('start-game-button').addEventListener('click', async () => {
         await fetch(`${API_URL}/game/start`, { method: 'POST' });
         await getGameState();
@@ -134,21 +135,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('play-button').addEventListener('click', async () => {
-        const cardsToPlay = selectedCardsState;
+        const selectedCardsNodes = document.querySelectorAll('#my-hand .card.selected');
+        const cardsToPlay = Array.from(selectedCardsNodes).map(node => node.dataset.cardName);
 
         if (cardsToPlay.length === 0) {
             alert("Select at least one card to play.");
             return;
         }
-        
+
         await fetch(`${API_URL}/game/play`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ player_id: myPlayerId, cards: cardsToPlay })
         });
 
-        selectedCardsState = [];
-        await getGameState(); // Ambil state setelah aksi
+        await getGameState();
         pollGameState();
     });
 
@@ -158,10 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ player_id: myPlayerId })
         });
-        await getGameState(); // Ambil state setelah aksi
+        await getGameState();
         pollGameState();
     });
 
-    // Panggil getGameState sekali saat halaman dimuat
     getGameState();
+    pollGameState();
 });

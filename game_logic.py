@@ -13,8 +13,16 @@ class LiarDeckGame:
         self.log = ["Game has not started."]
 
     def start_game(self, player_ids=["player1", "player2", "player3", "player4"]):
-        if self.game_started:
-            return
+        # --- PERUBAHAN: Reset semua variabel state untuk game baru yang bersih ---
+        self.players = {}
+        self.card_pile = []
+        self.current_turn_index = 0
+        self.player_order = []
+        self.reference_card = None
+        self.last_play = {"player_id": None, "cards": []}
+        self.game_winner = None
+        self.log = ["Game has not started."]
+        # --- Akhir dari blok reset ---
 
         # 1. Buat dek kartu sesuai aturan
         ranks = ["Ace", "Jack", "Queen", "King"]
@@ -56,7 +64,8 @@ class LiarDeckGame:
         }
         return state
         
-    def next_turn(self):
+    # --- PERUBAHAN: Modifikasi fungsi next_turn untuk menerima argumen ---
+    def next_turn(self, set_turn_to_player=None):
         # Pindah ke pemain berikutnya yang belum tereliminasi
         active_players = [p for p in self.player_order if not self.players[p]["is_eliminated"]]
         if not active_players or len(active_players) == 1:
@@ -64,9 +73,14 @@ class LiarDeckGame:
             self.log.append(f"Game over! Winner is {self.game_winner}")
             return
 
-        self.current_turn_index = (self.current_turn_index + 1) % len(self.player_order)
-        while self.players[self.player_order[self.current_turn_index]]["is_eliminated"]:
+        if set_turn_to_player:
+            # Jika ada pemenang challenge, set giliran ke dia
+            self.current_turn_index = self.player_order.index(set_turn_to_player)
+        else:
+            # Jika tidak, lanjutkan ke pemain berikutnya dalam urutan
             self.current_turn_index = (self.current_turn_index + 1) % len(self.player_order)
+            while self.players[self.player_order[self.current_turn_index]]["is_eliminated"]:
+                self.current_turn_index = (self.current_turn_index + 1) % len(self.player_order)
         
         self.log.append(f"It's {self.player_order[self.current_turn_index]}'s turn.")
 
@@ -87,7 +101,7 @@ class LiarDeckGame:
         self.card_pile.extend(cards_played)
         self.last_play = {"player_id": player_id, "cards": cards_played}
         self.log.append(f"{player_id} played {len(cards_played)} card(s).")
-        self.next_turn()
+        self.next_turn() # Panggilan ini tidak berubah, akan memajukan giliran secara normal
         return {"status": "OK"}
 
 
@@ -117,5 +131,6 @@ class LiarDeckGame:
         # Reset tumpukan untuk ronde baru
         self.card_pile = []
         
-        self.next_turn()
+        # --- PERUBAHAN: Panggil next_turn dengan menyertakan pemenang challenge ---
+        self.next_turn(set_turn_to_player=winner)
         return {"status": "OK", "challenge_winner": winner, "challenge_loser": loser}
