@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Liar's Deck Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Liar's Deck: Sudden Death</h1>
+    
+    <div id="game-container">
+        <div id="player-area">
+            <h2>Your Hand (<span id="player-id"></span>)</h2>
+            <div id="my-hand" class="card-area"></div>
+            <div id="actions">
+                <button id="play-button">Play Selected Cards</button>
+                <button id="challenge-button">Challenge!</button>
+            </div>
+        </div>
+        
+        <div id="table-area">
+            <h2>Game Table</h2>
+            <p>Reference Card: <b id="ref-card"></b></p>
+            <p>Cards in Pile: <b id="pile-count"></b></p>
+            <p>Current Turn: <b id="current-turn"></b></p>
+            <h3>Game Log</h3>
+            <ul id="game-log"></ul>
+        </div>
+
+        <div id="opponents-area">
+            <h2>Opponents</h2>
+            <div id="opponents"></div>
+        </div>
+    </div>
+    <button id="start-game-button">Start New Game</button>
+
+    <script src="script.js"></script>
+</body>
+</html>

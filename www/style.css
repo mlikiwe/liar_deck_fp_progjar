@@ -1,0 +1,141 @@
+/* General Body Styling */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+h1, h2, h3 {
+    color: #ffffff;
+    border-bottom: 2px solid #4CAF50;
+    padding-bottom: 5px;
+}
+
+/* Game Container Layout */
+#game-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    width: 100%;
+    max-width: 1200px;
+    justify-content: center;
+}
+
+/* Styling untuk setiap area utama */
+#player-area, #table-area, #opponents-area {
+    background-color: #2c2c2c;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    flex: 1;
+    min-width: 300px;
+}
+
+/* Area Kartu Pemain */
+#my-hand {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 120px;
+    padding: 10px;
+    background-color: #222;
+    border-radius: 5px;
+}
+
+/* Styling Kartu */
+.card {
+    width: 70px;
+    height: 100px;
+    background-color: #f0f0f0;
+    color: #111;
+    border: 2px solid #aaa;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, border-color 0.2s;
+    user-select: none; /* Mencegah teks terseleksi saat diklik */
+}
+
+.card:hover {
+    transform: translateY(-10px);
+    border-color: #4CAF50;
+}
+
+/* Styling untuk Kartu yang Dipilih */
+.card.selected {
+    border-color: #ffc107; /* Warna kuning untuk menandakan pilihan */
+    background-color: #fffde7;
+    transform: translateY(-15px);
+    box-shadow: 0 5px 15px rgba(255, 193, 7, 0.4);
+}
+
+/* Styling Tombol */
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+    margin-top: 15px;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+button:disabled {
+    background-color: #555;
+    color: #888;
+    cursor: not-allowed;
+}
+
+#start-game-button {
+    background-color: #008CBA;
+    margin-bottom: 20px;
+}
+#start-game-button:hover {
+    background-color: #007ba7;
+}
+
+#challenge-button {
+    background-color: #f44336; /* Warna merah untuk tantangan */
+}
+#challenge-button:hover {
+    background-color: #d32f2f;
+}
+
+
+/* Area Log Permainan */
+#game-log {
+    list-style-type: none;
+    padding: 0;
+    margin-top: 10px;
+    height: 150px;
+    overflow-y: auto;
+    background-color: #111;
+    border: 1px solid #444;
+    border-radius: 5px;
+    padding: 10px;
+}
+
+#game-log li {
+    padding: 5px;
+    border-bottom: 1px dashed #333;
+}
+
+#game-log li:last-child {
+    border-bottom: none;
+}
