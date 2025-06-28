@@ -43,12 +43,11 @@ class LiarDeckGame:
         self.log.append(f"It's {self.player_order[self.current_turn_index]}'s turn.")
         
     def generate_new_deck(self):
-        # untuk setiap pemain yang ada hand buat baru
         deck = self.shuffle_deck()
-        for i, player_id in self.players:
-            if self.players[player_id]["is_eliminated"]:
-                continue
+        
+        for i, player_id in enumerate(self.player_order):
             self.players[player_id]["hand"] = deck[i*6 : (i+1)*6]
+        
             
         
     def shuffle_deck(self):
@@ -89,7 +88,6 @@ class LiarDeckGame:
         if set_turn_to_player:
             # Jika ada pemenang challenge, set giliran ke dia
             self.current_turn_index = self.player_order.index(set_turn_to_player)
-            self.generate_new_deck()  # Generate deck baru untuk pemain yang menang challenge
         else:
             # Jika tidak, lanjutkan ke pemain berikutnya dalam urutan
             self.current_turn_index = (self.current_turn_index + 1) % len(self.player_order)
@@ -177,5 +175,6 @@ class LiarDeckGame:
         self.card_pile = []
         
         # --- PERUBAHAN: Panggil next_turn dengan menyertakan pemenang challenge ---
+        self.generate_new_deck()
         self.next_turn(set_turn_to_player=winner)
         return {"status": "OK", "challenge_winner": winner, "challenge_loser": loser}
