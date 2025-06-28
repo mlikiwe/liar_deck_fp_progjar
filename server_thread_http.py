@@ -1,8 +1,6 @@
 from socket import *
 import socket
 import threading
-import time
-import sys
 import logging
 from http import HttpServer
 
@@ -15,10 +13,7 @@ class ProcessTheClient(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
-        # ================== AWAL DARI KODE YANG DIPERBAIKI ==================
-        # Logika baru yang lebih andal untuk membaca request HTTP dengan body
         try:
-            # 1. Baca semua headers sampai menemukan baris kosong (\r\n\r\n)
             all_headers = b""
             while True:
                 data = self.connection.recv(1024)
@@ -26,11 +21,9 @@ class ProcessTheClient(threading.Thread):
                     break
                 all_headers += data
                 if b"\r\n\r\n" in all_headers:
-                    # Pisahkan header dan bagian awal dari body jika ada
                     header_part, body_part = all_headers.split(b"\r\n\r\n", 1)
                     break
             
-            # 2. Cari Content-Length dari header
             headers_str = header_part.decode('utf-8')
             content_length = 0
             for line in headers_str.split('\r\n'):
@@ -38,31 +31,25 @@ class ProcessTheClient(threading.Thread):
                     content_length = int(line.split(':')[1].strip())
                     break
             
-            # 3. Baca sisa body sesuai Content-Length
             while len(body_part) < content_length:
                 data = self.connection.recv(1024)
                 if not data:
                     break
                 body_part += data
 
-            # 4. Gabungkan kembali menjadi request utuh untuk diproses
             full_request_str = headers_str + "\r\n\r\n" + body_part.decode('utf-8')
             
-            logging.warning(f"data dari client: {full_request_str}")
+            # logging.warning(f"data dari client: {full_request_str}")
             
-            # Proses request
             hasil = httpserver.proses(full_request_str)
             
-            # Kirim balasan
-            # Tidak perlu menambahkan "\\r\\n\\r\\n" lagi karena sudah ada di dalam 'hasil'
-            logging.warning(f"balas ke client: {hasil}")
+            # logging.warning(f"balas ke client: {hasil}")
             self.connection.sendall(hasil)
 
         except Exception as e:
             logging.error(f"Error processing client: {e}")
         finally:
             self.connection.close()
-        # =================== AKHIR DARI KODE YANG DIPERBAIKI ===================
 
 class Server(threading.Thread):
     def __init__(self):
