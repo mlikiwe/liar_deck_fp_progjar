@@ -23,28 +23,41 @@ class LiarDeckGame:
         self.game_winner = None
         self.log = ["Game has not started."]
         # --- Akhir dari blok reset ---
-
-        # 1. Buat dek kartu sesuai aturan
-        ranks = ["Ace", "Jack", "Queen", "King"]
-        deck = [rank for rank in ranks for _ in range(6)]
-        random.shuffle(deck)
-
+        
+        deck = self.shuffle_deck()
+        
         # 2. Inisialisasi pemain dan bagi kartu
         self.player_order = [pid.strip() for pid in player_ids]
         
         for i, player_id in enumerate(self.player_order):
             self.players[player_id] = {
                 "hand": deck[i*6 : (i+1)*6],
+                "roulette_index":0,
+                "roulette": random.randint(0, 2),  # Indeks acak untuk roulette
                 "is_eliminated": False
             }
-
-        # 3. Tentukan kartu acuan pertama
-        self.reference_card = random.choice(ranks)
         
         self.game_started = True
         self.current_turn_index = 0
         self.log = [f"Game started. Reference card is {self.reference_card}."]
         self.log.append(f"It's {self.player_order[self.current_turn_index]}'s turn.")
+        
+    def generate_new_deck(self):
+        # untuk setiap pemain yang ada hand buat baru
+        deck = self.shuffle_deck()
+        for i, player_id in self.players:
+            if self.players[player_id]["is_eliminated"]:
+                continue
+            self.players[player_id]["hand"] = deck[i*6 : (i+1)*6]
+            
+        
+    def shuffle_deck(self):
+        # Mengacak dek kartu
+        ranks = ["Ace", "Jack", "Queen", "King"]
+        deck = [rank for rank in ranks for _ in range(6)]
+        random.shuffle(deck)
+        self.reference_card = random.choice(ranks)  # Pilih kartu acuan awal
+        return deck
 
     def get_game_state(self, player_id):
         # Mengembalikan state yang relevan untuk satu pemain
@@ -76,6 +89,7 @@ class LiarDeckGame:
         if set_turn_to_player:
             # Jika ada pemenang challenge, set giliran ke dia
             self.current_turn_index = self.player_order.index(set_turn_to_player)
+            self.generate_new_deck()  # Generate deck baru untuk pemain yang menang challenge
         else:
             # Jika tidak, lanjutkan ke pemain berikutnya dalam urutan
             self.current_turn_index = (self.current_turn_index + 1) % len(self.player_order)
@@ -103,7 +117,39 @@ class LiarDeckGame:
         self.log.append(f"{player_id} played {len(cards_played)} card(s).")
         self.next_turn() # Panggilan ini tidak berubah, akan memajukan giliran secara normal
         return {"status": "OK"}
-
+    
+    def kill_player(self, player_id):
+        if player_id not in self.players or self.players[player_id]["is_eliminated"]:
+            return {"status": "ERROR", "message": "Player not found or already eliminated."}
+        
+        self.players[player_id]["is_eliminated"] = True
+        self.log.append(f"{player_id} has been eliminated.")
+        
+        # Cek apakah game berakhir
+        active_players = [p for p in self.player_order if not self.players[p]["is_eliminated"]]
+        if len(active_players) == 1:
+            self.game_winner = active_players[0]
+            self.log.append(f"Game over! Winner is {self.game_winner}")
+        
+        # Pindah ke pemain berikutnya
+        self.next_turn()
+        return {"status": "OK", "eliminated_player": player_id}
+    
+    def proceed_roulette(self, player_id):
+        if self.player_order[self.current_turn_index] != player_id:
+            return {"status": "ERROR", "message": "Not your turn."}
+        
+        roulette_index = self.players[player_id]["roulette_index"]
+        bullet_position = self.players[player_id]["roulette"]
+        
+        if roulette_index == bullet_position:
+           self.kill_player(player_id)
+           self.log.append(f"{player_id} has been shot by the roulette!")
+        else:
+            # Pemain aman, lanjutkan ke giliran berikutnya
+            self.players[player_id]["roulette_index"] += 1
+            if self.players[player_id]["roulette_index"] >= 3:
+                self.players[player_id]["roulette_index"] = 0       
 
     def challenge(self, challenger_id):
         # Logika untuk tantangan
@@ -119,14 +165,13 @@ class LiarDeckGame:
         if is_a_lie:
             # Penantang BENAR, yang main kartu KALAH
             winner, loser = challenger_id, player_who_played
+            self.proceed_roulette(loser)  # Pemain yang kalah harus menjalani roulette
             self.log.append(f"{challenger_id} challenges {player_who_played}... and was RIGHT! The card was not a {self.reference_card}.")
         else:
             # Penantang SALAH, penantang KALAH
             winner, loser = player_who_played, challenger_id
+            self.proceed_roulette(winner)
             self.log.append(f"{challenger_id} challenges {player_who_played}... and was WRONG!")
-        
-        self.players[loser]["is_eliminated"] = True
-        self.log.append(f"{loser} has been eliminated.")
         
         # Reset tumpukan untuk ronde baru
         self.card_pile = []
