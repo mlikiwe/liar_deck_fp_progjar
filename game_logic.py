@@ -66,6 +66,7 @@ class LiarDeckGame:
         state = {
             "game_started": True,
             "your_hand": self.players.get(player_id, {}).get("hand", []),
+            "your_roulette_index": self.players.get(player_id, {}).get("roulette_index", 0),
             "all_players_card_count": {pid: len(p["hand"]) for pid, p in self.players.items()},
             "players_eliminated": [pid for pid, p in self.players.items() if p["is_eliminated"]],
             "card_pile_count": len(self.card_pile),
@@ -168,7 +169,7 @@ class LiarDeckGame:
         else:
             # Penantang SALAH, penantang KALAH
             winner, loser = player_who_played, challenger_id
-            self.proceed_roulette(winner)
+            self.proceed_roulette(loser)
             self.log.append(f"{challenger_id} challenges {player_who_played}... and was WRONG!")
         
         # Reset tumpukan untuk ronde baru
