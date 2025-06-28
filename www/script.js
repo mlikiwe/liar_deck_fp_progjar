@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const myPlayerId = urlParams.get('player') || 'player1';
     document.getElementById('player-id').textContent = myPlayerId;
 
-    const API_URL = 'http://localhost:8889';
+    const API_URL = 'http://localhost:55555';
 
     let isPolling = false;
 
