@@ -46,9 +46,9 @@ class LiarDeckGame:
         deck = self.shuffle_deck()
         
         for i, player_id in enumerate(self.player_order):
+            if self.players[player_id]["is_eliminated"]:
+                continue
             self.players[player_id]["hand"] = deck[i*6 : (i+1)*6]
-        
-            
         
     def shuffle_deck(self):
         # Mengacak dek kartu
@@ -66,7 +66,8 @@ class LiarDeckGame:
         state = {
             "game_started": True,
             "your_hand": self.players.get(player_id, {}).get("hand", []),
-            "your_roulette_index": self.players.get(player_id, {}).get("roulette_index", 0),
+            "bullet_position": self.players[player_id]["roulette"],
+            "your_roulette_index": self.players[player_id]["roulette_index"],
             "all_players_card_count": {pid: len(p["hand"]) for pid, p in self.players.items()},
             "players_eliminated": [pid for pid, p in self.players.items() if p["is_eliminated"]],
             "card_pile_count": len(self.card_pile),
@@ -134,10 +135,7 @@ class LiarDeckGame:
         self.next_turn()
         return {"status": "OK", "eliminated_player": player_id}
     
-    def proceed_roulette(self, player_id):
-        if self.player_order[self.current_turn_index] != player_id:
-            return {"status": "ERROR", "message": "Not your turn."}
-        
+    def proceed_roulette(self, player_id):        
         roulette_index = self.players[player_id]["roulette_index"]
         bullet_position = self.players[player_id]["roulette"]
         
@@ -147,8 +145,7 @@ class LiarDeckGame:
         else:
             # Pemain aman, lanjutkan ke giliran berikutnya
             self.players[player_id]["roulette_index"] += 1
-            if self.players[player_id]["roulette_index"] >= 3:
-                self.players[player_id]["roulette_index"] = 0       
+            self.log.append(f"Player {player_id} survived the roulette! Current roulette index: {self.players[player_id]['roulette_index']}.")
 
     def challenge(self, challenger_id):
         # Logika untuk tantangan
