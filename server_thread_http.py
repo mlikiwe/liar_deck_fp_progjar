@@ -72,7 +72,7 @@ class Server(threading.Thread):
             self.the_clients.append(clt)
 
 class LBServer(threading.Thread):
-    def __init__(self, ip='0.0.0.0', port=55555, worker_ports=[56000, 56001]):
+    def __init__(self, ip='0.0.0.0', port=8889, worker_ports=[56000, 56001, 56002, 56003]):
         self.ip = ip
         self.port = port
         self.worker_ports = worker_ports
@@ -144,14 +144,20 @@ class LBServer(threading.Thread):
 def main():
     worker1 = Server(ipaddr='127.0.0.1', port=56000)
     worker2 = Server(ipaddr='127.0.0.1', port=56001)
+    worker3 = Server(ipaddr='127.0.0.1', port=56002)
+    worker4 = Server(ipaddr='127.0.0.1', port=56003)
     worker1.start()
     worker2.start()
+    worker3.start()
+    worker4.start()
 
-    lb = LBServer(worker_ports=[56000, 56001])
+    lb = LBServer(worker_ports=[56000, 56001, 56002, 56003])
     lb.start()
 
     worker1.join()
     worker2.join()
+    worker3.join()
+    worker4.join()
     lb.join()
 
 if __name__ == "__main__":

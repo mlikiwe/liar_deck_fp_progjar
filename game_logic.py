@@ -45,8 +45,9 @@ class LiarDeckGame:
         mongodb.set_game_state(1 if self.game_started else 0)
         self.current_turn_index = 0
         mongodb.set_current_turn_index(self.current_turn_index)
-        self.write_log = [f"Game started. Reference card is {self.reference_card}."]
-        self.write_log(f"It's {self.player_order[self.current_turn_index]}'s turn.")
+        self.log = [f"Game started. Reference card is {self.reference_card}."]
+        self.add_to_log(f"Game started. Reference card is {self.reference_card}.")
+        self.add_to_log(f"It's {self.player_order[self.current_turn_index]}'s turn.")
         
     def generate_new_deck(self):
         deck = self.shuffle_deck()
@@ -79,8 +80,9 @@ class LiarDeckGame:
         
         state = {
             "game_started": True,
+            "is_eliminated": player_data["is_eliminated"],
             "your_hand": player_data["hand"] if player_data else [],
-            "your_roulette_index": player_data["roulette_index"] if player_data else 0, 
+            "roulette_index": player_data["roulette_index"] if player_data else 0, 
             "all_players_card_count": {pid: len(p["hand"]) for pid, p in all_players.items()},
             "players_eliminated": [pid for pid, p in self.players.items() if p["is_eliminated"]],
             "card_pile_count": len(card_pile) if card_pile else 0,
@@ -95,7 +97,7 @@ class LiarDeckGame:
         active_players = [p for p in self.player_order if not self.players[p]["is_eliminated"]]
         if not active_players or len(active_players) == 1:
             self.game_winner = active_players[0] if active_players else "No one"
-            self.write_log(f"Game over! Winner is {self.game_winner}")
+            self.add_to_log(f"Game over! Winner is {self.game_winner}")
             return
 
         if set_turn_to_player:
@@ -109,7 +111,7 @@ class LiarDeckGame:
                 
         mongodb.set_current_turn_index(self.current_turn_index)
         
-        self.write_log(f"It's {self.player_order[self.current_turn_index]}'s turn.")
+        self.add_to_log(f"It's {self.player_order[self.current_turn_index]}'s turn.")
 
     def play_card(self, player_id, cards_played):
         if self.player_order[self.current_turn_index] != player_id:
@@ -122,7 +124,6 @@ class LiarDeckGame:
             if card in self.players[player_id]["hand"]:
                 self.players[player_id]["hand"].remove(card)
                 mongodb.update_player_hand(player_id, self.players[player_id]["hand"])
-                
             else:
                 return {"status": "ERROR", "message": f"You don't have a {card}."}
 
@@ -130,8 +131,8 @@ class LiarDeckGame:
         mongodb.set_card_pile(self.card_pile)
         self.last_play = {"player_id": player_id, "cards": cards_played}
         mongodb.set_last_play(player_id, cards_played)
-        self.write_log(f"{player_id} played {len(cards_played)} card(s).")
-        self.next_turn() # Panggilan ini tidak berubah, akan memajukan giliran secara normal
+        self.add_to_log(f"{player_id} played {len(cards_played)} card(s).")
+        self.next_turn()
         return {"status": "OK"}
     
     def kill_player(self, player_id):
@@ -140,18 +141,18 @@ class LiarDeckGame:
         
         self.players[player_id]["is_eliminated"] = True
         mongodb.set_player_killed(player_id)
-        self.write_log(f"{player_id} has been eliminated.")
+        self.add_to_log(f"{player_id} has been eliminated.")
         
         # Cek apakah game berakhir
         active_players = [p for p in self.player_order if not self.players[p]["is_eliminated"]]
         if len(active_players) == 1:
             self.game_winner = active_players[0]
             mongodb.set_game_winner(self.game_winner)
-            self.write_log(f"Game over! Winner is {self.game_winner}")
+            self.add_to_log(f"Game over! Winner is {self.game_winner}")
             
         # Pindah ke pemain berikutnya
-        self.next_turn()
-        return {"status": "OK", "eliminated_player": player_id}
+        # self.next_turn()
+        # return {"status": "OK", "eliminated_player": player_id}
     
     def proceed_roulette(self, player_id):        
         roulette_index = self.players[player_id]["roulette_index"]
@@ -159,15 +160,14 @@ class LiarDeckGame:
         
         if roulette_index == bullet_position:
            self.kill_player(player_id)
-           self.write_log(f"{player_id} has been shot by the roulette!")
+           self.add_to_log(f"{player_id} has been shot by the roulette!")
         else:
             # Pemain aman, lanjutkan ke giliran berikutnya
             self.players[player_id]["roulette_index"] += 1
             mongodb.set_roulette_index(player_id, self.players[player_id]["roulette_index"])
-            self.write_log(f"{player_id} survived the roulette! Current roulette index: {self.players[player_id]['roulette_index']}.")
+            self.add_to_log(f"{player_id} survived the roulette! Current roulette index: {self.players[player_id]['roulette_index']}.")
 
     def challenge(self, challenger_id):
-        # Logika untuk tantangan
         player_who_played = self.last_play["player_id"]
         cards_in_play = self.last_play["cards"]
         
@@ -180,12 +180,12 @@ class LiarDeckGame:
         if is_a_lie:
             # Penantang BENAR, yang main kartu KALAH
             winner, loser = challenger_id, player_who_played
-            self.write_log(f"{challenger_id} challenges {player_who_played}... and was RIGHT! The card was not a {self.reference_card}.")
+            self.add_to_log(f"{challenger_id} challenges {player_who_played}... and was RIGHT! The card was not a {self.reference_card}.")
             self.proceed_roulette(loser)  # Pemain yang kalah harus menjalani roulette
         else:
             # Penantang SALAH, penantang KALAH
             winner, loser = player_who_played, challenger_id
-            self.write_log(f"{challenger_id} challenges {player_who_played}... and was WRONG!")
+            self.add_to_log(f"{challenger_id} challenges {player_who_played}... and was WRONG!")
             self.proceed_roulette(loser)
         
         # Reset tumpukan untuk ronde baru
@@ -197,7 +197,6 @@ class LiarDeckGame:
         self.next_turn(set_turn_to_player=winner)
         return {"status": "OK", "challenge_winner": winner, "challenge_loser": loser}
     
-    def write_log(self, message):
-        # Tambahkan pesan ke log
+    def add_to_log(self, message):
         self.log.append(message)
         mongodb.set_log(self.log)
