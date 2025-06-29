@@ -25,6 +25,11 @@ class HttpServer:
 
         if 'Content-Type' not in headers:
             headers['Content-Type'] = 'application/json'
+        
+        # Add CORS headers to allow requests from any origin
+        headers['Access-Control-Allow-Origin'] = '*'
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        headers['Access-Control-Allow-Headers'] = 'Content-Type'
 
         tanggal = datetime.now().strftime('%c')
         resp = []
@@ -44,7 +49,6 @@ class HttpServer:
         requests = data.split("\r\n")
         baris = requests[0]
         
-        # Ekstrak body jika ada (untuk POST)
         body_start_index = data.find('\r\n\r\n') + 4
         body = data[body_start_index:]
         
@@ -52,9 +56,16 @@ class HttpServer:
         try:
             method = j[0].upper().strip()
             object_address = j[1].strip()
+            
+            # Handle OPTIONS pre-flight request for CORS
+            if method == 'OPTIONS':
+                return self.response(204, 'No Content', headers={
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                })
 
-            if method == 'GET':
-                # Pisahkan path dan query params
+            elif method == 'GET':
                 parts = object_address.split('?')
                 path = parts[0]
                 params = {}
@@ -74,8 +85,12 @@ class HttpServer:
 
     def http_get(self, path, params):
         if path == '/game/state':
-            player_id = params.get('player_id', 'player1')
-            state = game.get_game_state(player_id)
+            player_id = params.get('player_id')
+            if not player_id:
+                # Fallback or error if no player_id is provided
+                state = game.get_game_state(None) # Get a general state / lobby view
+            else:
+                state = game.get_game_state(player_id)
             return self.response(200, 'OK', state)
         else:
             try:
@@ -86,7 +101,6 @@ class HttpServer:
                 with open(filepath, 'rb') as f:
                     content = f.read()
                 
-                # Tentukan content type
                 file_ext = os.path.splitext(filepath)[1]
                 content_type = self.types.get(file_ext, 'application/octet-stream')
                 
@@ -101,11 +115,15 @@ class HttpServer:
             return self.response(400, 'Bad Request', {"error": "Invalid JSON body"})
 
         try:
-            if object_address == '/game/start':
-                if not hasattr(game, 'players') or not game.players:
-                    game.players = {}
-                game.start_game()
-                return self.response(200, 'OK', {"message": "Game started successfully."})
+            if object_address == '/game/join':
+                result = game.join_game()
+                if result.get("status") == "ERROR":
+                    return self.response(400, 'Bad Request', result)
+                return self.response(200, 'OK', result)
+
+            elif object_address == '/game/start':
+                result = game.start_game()
+                return self.response(200, 'OK', result)
             
             elif object_address == '/game/play':
                 player_id = payload.get("player_id")

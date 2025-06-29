@@ -3,6 +3,8 @@ import socket
 import threading
 import logging
 from http import HttpServer
+# ---- TAMBAHKAN IMPORT INI ----
+from mongo_client import MongoClient
 
 httpserver = HttpServer()
 
@@ -39,11 +41,8 @@ class ProcessTheClient(threading.Thread):
 
             full_request_str = headers_str + "\r\n\r\n" + body_part.decode('utf-8')
             
-            # logging.warning(f"data dari client: {full_request_str}")
-            
             hasil = httpserver.proses(full_request_str)
             
-            # logging.warning(f"balas ke client: {hasil}")
             self.connection.sendall(hasil)
 
         except Exception as e:
@@ -92,7 +91,6 @@ class LBServer(threading.Thread):
             self.current = (self.current + 1) % len(self.worker_ports)
             logging.warning(f"Forwarding to worker on port {worker_port}")
             
-            # Handle dalam thread terpisah untuk mencegah blocking
             threading.Thread(target=self.forward_request, args=(conn, worker_port)).start()
 
     def forward_request(self, conn, worker_port):
@@ -101,7 +99,6 @@ class LBServer(threading.Thread):
             worker_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             worker_sock.connect(('localhost', worker_port))
 
-            # Gunakan shared state untuk koordinasi thread
             connection_active = {'active': True}
             
             t1 = threading.Thread(target=self.pipe, args=(conn, worker_sock, connection_active))
@@ -116,16 +113,9 @@ class LBServer(threading.Thread):
         except Exception as e:
             logging.error(f"Forward error: {e}")
         finally:
-            # Tutup socket dengan aman
-            try:
-                if worker_sock:
-                    worker_sock.close()
-            except:
-                pass
-            try:
-                conn.close()
-            except:
-                pass
+            if worker_sock:
+                worker_sock.close()
+            conn.close()
 
     def pipe(self, source, destination, connection_active):
         try:
@@ -137,11 +127,18 @@ class LBServer(threading.Thread):
         except Exception as e:
             logging.error(f"Pipe error: {e}")
         finally:
-            # Tandai koneksi tidak aktif
             connection_active['active'] = False
 
 
 def main():
+    # --- TAMBAHKAN BLOK KODE INI ---
+    # Reset database setiap kali server dijalankan
+    logging.warning("Resetting database for a new session...")
+    db_client = MongoClient()
+    db_client.reset_database()
+    logging.warning("Database reset complete.")
+    # --------------------------------
+
     worker1 = Server(ipaddr='127.0.0.1', port=56000)
     worker2 = Server(ipaddr='127.0.0.1', port=56001)
     worker3 = Server(ipaddr='127.0.0.1', port=56002)

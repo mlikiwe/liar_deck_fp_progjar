@@ -1,24 +1,51 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const myPlayerId = urlParams.get("player") || "player1";
-  document.getElementById("player-id").textContent = myPlayerId;
-
   const API_URL = "http://localhost:8889";
 
+  // Global variable to hold the player's ID
+  let myPlayerId = null;
   let isPolling = false;
 
-  async function getGameState() {
-    try {
-      const response = await fetch(
-        `${API_URL}/game/state?player_id=${myPlayerId}`
-      );
-      if (!response.ok) throw new Error("Failed to get game state");
-      const state = await response.json();
-      updateUI(state);
-      return state;
-    } catch (error) {
-      console.error("Error fetching game state:", error);
-      return null;
+  const opponentsDiv = document.getElementById("opponents");
+  const startButton = document.getElementById("start-game-button");
+  const logUl = document.getElementById("game-log");
+  const actionsDiv = document.getElementById("actions");
+  const myHandDiv = document.getElementById("my-hand");
+  const playerArea = document.getElementById("player-area");
+
+  // --- Main Functions ---
+
+  async function joinGameAndInitialize() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const existingPlayerId = urlParams.get("player");
+
+    if (existingPlayerId) {
+      myPlayerId = existingPlayerId;
+      document.getElementById("player-id").textContent = myPlayerId;
+      await getGameState(); // Initial fetch
+      pollGameState(); // Start polling
+    } else {
+      try {
+        const response = await fetch(`${API_URL}/game/join`, {
+          method: "POST",
+        });
+        const data = await response.json();
+
+        if (response.ok && data.player_id) {
+          myPlayerId = data.player_id;
+          const newUrl = `${window.location.pathname}?player=${myPlayerId}`;
+          history.pushState({ path: newUrl }, "", newUrl);
+
+          document.getElementById("player-id").textContent = myPlayerId;
+          await getGameState(); // Initial fetch
+          pollGameState(); // Start polling
+        } else {
+          alert("Failed to join game: " + (data.message || "Unknown error"));
+          logUl.innerHTML = `<li><b>Error:</b> ${data.message}</li>`;
+        }
+      } catch (error) {
+        console.error("Error joining game:", error);
+        alert("Could not connect to the server to join the game.");
+      }
     }
   }
 
@@ -28,78 +55,89 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const opponentsDiv = document.getElementById("opponents");
     opponentsDiv.innerHTML = "";
-    if (state.all_players_card_count) {
-      for (const [id, count] of Object.entries(state.all_players_card_count)) {
-        if (id !== myPlayerId) {
-          const isEliminated =
-            state.players_eliminated && state.players_eliminated.includes(id);
-          const isWinner = id === state.game_winner;
+    logUl.innerHTML = "";
 
-          let status = "";
-          if (isWinner) {
-            status = "(WINNER)";
-          } else if (isEliminated) {
-            status = "(ELIMINATED)";
-          }
-
-          opponentsDiv.innerHTML += `<p>${id}: ${count} cards ${status}</p>`;
-        }
-      }
+    if (state.log && state.log.length > 0) {
+      state.log.forEach((msg) => {
+        logUl.innerHTML += `<li>${msg}</li>`;
+      });
+      logUl.scrollTop = logUl.scrollHeight;
+    } else {
+      logUl.innerHTML = "<li>Welcome to the game lobby!</li>";
     }
 
-    const isMyTurn = state.current_turn === myPlayerId;
-    const startButton = document.getElementById("start-game-button");
-    const logUl = document.getElementById("game-log");
+    if (!state.game_started) {
+      actionsDiv.style.display = "none";
+      myHandDiv.innerHTML = "";
+      document.getElementById("table-area").style.display = "none";
 
-    // 2. Mengatur UI berdasarkan status permainan (tanpa 'return' prematur)
-    if (!state.game_started || state.game_winner) {
-      document.getElementById("actions").style.display = "none";
+      opponentsDiv.innerHTML = "<h3>Players in Lobby:</h3>";
+      if (state.assigned_players && state.assigned_players.length > 0) {
+        state.assigned_players.forEach((p_id) => {
+          const playerText = p_id === myPlayerId ? `${p_id} (You)` : p_id;
+          opponentsDiv.innerHTML += `<p>${playerText}</p>`;
+        });
+      }
 
-      if (state.game_winner) {
-        // Game Over
-        logUl.innerHTML = `<li><b>Winner is ${state.game_winner}! Game Over.</b></li>`;
-        if (myPlayerId === "player1") {
-          startButton.textContent = "Play New Game";
-          startButton.style.display = "block";
-        } else {
-          startButton.style.display = "none";
-        }
-        document.getElementById("my-hand").innerHTML = ""; // Kosongkan tangan
-        document.getElementById("current-turn").textContent = "Game Over";
+      if (myPlayerId === "player1") {
+        startButton.textContent = "Start Game";
+        startButton.style.display = "block";
       } else {
-        // Sebelum game dimulai
-        logUl.innerHTML = "<li>Game has not started.</li>";
-        if (myPlayerId === "player1") {
-          startButton.textContent = "Start New Game";
-          startButton.style.display = "block";
-        } else {
-          startButton.style.display = "none";
+        startButton.style.display = "none";
+        logUl.innerHTML += "<li>Waiting for player1 to start the game...</li>";
+      }
+    } else if (state.game_winner) {
+      actionsDiv.style.display = "none";
+      myHandDiv.innerHTML = "";
+      document.getElementById("table-area").style.display = "block";
+
+      logUl.innerHTML += `<li><b>Winner is ${state.game_winner}! Game Over.</b></li>`;
+      if (myPlayerId === "player1") {
+        startButton.textContent = "Play New Game";
+        startButton.style.display = "block";
+      } else {
+        startButton.style.display = "none";
+      }
+      document.getElementById("current-turn").textContent = "Game Over";
+    } else {
+      playerArea.style.display = "block";
+      document.getElementById("table-area").style.display = "block";
+      startButton.style.display = "none";
+      actionsDiv.style.display = "block";
+
+      if (state.all_players_card_count) {
+        for (const [id, count] of Object.entries(
+          state.all_players_card_count
+        )) {
+          if (id !== myPlayerId) {
+            let status = "";
+            if (
+              state.players_eliminated &&
+              state.players_eliminated.includes(id)
+            ) {
+              status = "(ELIMINATED)";
+            }
+            opponentsDiv.innerHTML += `<p>${id}: ${count} cards ${status}</p>`;
+          }
         }
       }
-    } else {
-      startButton.style.display = "none";
-      document.getElementById("actions").style.display = "block";
+
+      if (state.is_eliminated) {
+        playerArea.innerHTML = "<h1>You have been eliminated.</h1>";
+        actionsDiv.style.display = "none";
+        return;
+      }
+
+      const isMyTurn = state.current_turn === myPlayerId;
 
       document.getElementById("ref-card").textContent = state.reference_card;
       document.getElementById("pile-count").textContent = state.card_pile_count;
       document.getElementById("current-turn").textContent = state.current_turn;
-      const rouletteIndex = document.getElementById("roulette-index");
-      rouletteIndex.textContent = `Roulette Index: ${state.roulette_index}`;
+      document.getElementById(
+        "roulette-index"
+      ).textContent = `Roulette Index: ${state.roulette_index}`;
 
-      logUl.innerHTML = "";
-      state.log.forEach((msg) => {
-        logUl.innerHTML += `<li>${msg}</li>`;
-      });
-
-      if (state.is_eliminated) {
-        const playerArea = document.getElementById("player-area");
-        playerArea.innerHTML = "<h5>You are eliminated from the game.</h5>";
-        document.getElementById("actions").style.display = "none";
-      }
-
-      const myHandDiv = document.getElementById("my-hand");
       myHandDiv.innerHTML = "";
       state.your_hand.forEach((card) => {
         const cardDiv = document.createElement("div");
@@ -120,58 +158,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function pollGameState() {
-    if (isPolling) return;
-    isPolling = true;
-
-    while (true) {
-      const state = await getGameState();
-      if (!state || state.game_winner || state.current_turn === myPlayerId) {
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-    isPolling = false;
-  }
-
-  const setLoading = (isLoading) => {
-    const loadingIndicator =
-      document.getElementById("loading-indicator") ||
-      (() => {
-        const indicator = document.createElement("div");
-        indicator.id = "loading-indicator";
-        indicator.innerHTML = "Loading...";
-        indicator.style.position = "fixed";
-        indicator.style.top = "10px";
-        indicator.style.right = "10px";
-        indicator.style.padding = "8px 12px";
-        indicator.style.background = "rgba(0,0,0,0.7)";
-        indicator.style.color = "white";
-        indicator.style.borderRadius = "4px";
-        indicator.style.display = "none";
-        document.body.appendChild(indicator);
-        return indicator;
-      })();
-
-    loadingIndicator.style.display = isLoading ? "block" : "none";
-  };
-
-  async function fetchWithLoading(url, options = {}) {
-    setLoading(true);
-    try {
-      const response = await fetch(url, options);
-      return response;
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function getGameState() {
+    if (!myPlayerId) return null;
     try {
-      const response = await fetchWithLoading(
+      const response = await fetch(
         `${API_URL}/game/state?player_id=${myPlayerId}`
       );
-      if (!response.ok) throw new Error("Failed to get game state");
+      if (!response.ok) {
+        console.error("Failed to get game state, status:", response.status);
+        return null;
+      }
       const state = await response.json();
       updateUI(state);
       return state;
@@ -181,13 +177,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  document
-    .getElementById("start-game-button")
-    .addEventListener("click", async () => {
-      await fetchWithLoading(`${API_URL}/game/start`, { method: "POST" });
+  async function pollGameState() {
+    if (isPolling) return;
+    isPolling = true;
+
+    while (true) {
+      const state = await getGameState();
+      // Hentikan polling jika game berakhir ATAU jika giliran kita
+      if (!state || state.game_winner || state.current_turn === myPlayerId) {
+        break;
+      }
+      // Tunggu 2 detik sebelum polling lagi
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    isPolling = false;
+  }
+
+  // --- Event Listeners ---
+
+  startButton.addEventListener("click", async () => {
+    try {
+      const response = await fetch(`${API_URL}/game/start`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        alert("Error starting game: " + data.message);
+      }
       await getGameState();
-      pollGameState();
-    });
+      pollGameState(); // Mulai polling setelah game dimulai
+    } catch (error) {
+      console.error("Error starting game:", error);
+      alert("Could not start the game.");
+    }
+  });
 
   document.getElementById("play-button").addEventListener("click", async () => {
     const selectedCardsNodes = document.querySelectorAll(
@@ -202,12 +224,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    await fetchWithLoading(`${API_URL}/game/play`, {
+    await fetch(`${API_URL}/game/play`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ player_id: myPlayerId, cards: cardsToPlay }),
     });
 
+    // Ambil state terbaru & mulai polling lagi karena giliran kita sudah selesai
     await getGameState();
     pollGameState();
   });
@@ -215,15 +238,16 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("challenge-button")
     .addEventListener("click", async () => {
-      await fetchWithLoading(`${API_URL}/game/challenge`, {
+      await fetch(`${API_URL}/game/challenge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ player_id: myPlayerId }),
       });
+      // Ambil state terbaru & mulai polling lagi karena giliran kita sudah selesai
       await getGameState();
       pollGameState();
     });
 
-  getGameState();
-  pollGameState();
+  // --- Initial Load ---
+  joinGameAndInitialize();
 });

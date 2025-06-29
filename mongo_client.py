@@ -106,14 +106,15 @@ class MongoClient:
         
     def get_all_players_data(self):
         all_players_data = {}
-        player_ids = ["player1", "player2", "player3", "player4"]
+        player_ids = self.get_player_order() or ["player1", "player2", "player3", "player4"]
         
         try:
             for player_id in player_ids:
                 player_doc = self.mongo_client.liar_decks.players.find_one({"_id": player_id})
                 if player_doc:
                     player_data = player_doc.copy()
-                    del player_data["_id"]
+                    if "_id" in player_data:
+                        del player_data["_id"]
                     all_players_data[player_id] = player_data
                 
             return all_players_data
@@ -163,7 +164,18 @@ class MongoClient:
         if doc:
             return doc["value"]
         return None
-    
+        
+    def set_assigned_players(self, players):
+        self.mongo_client.liar_decks.game_data.update_one(
+            {"_id": "assigned_players"}, 
+            {"$set": {"value": players}}, 
+            upsert=True
+        )
+
+    def get_assigned_players(self):
+        doc = self.mongo_client.liar_decks.game_data.find_one({"_id": "assigned_players"})
+        return doc['value'] if doc else []
+
     def set_roulette_index(self, player_id, index):
         self.mongo_client.liar_decks.players.update_one(
             {"_id": player_id}, 
@@ -183,9 +195,17 @@ class MongoClient:
         )
     
     def reset_database(self):
-        self.mongo_client.liar_decks.game_data.drop()
-        self.mongo_client.liar_decks.players.drop()
+        # Do not drop the entire collections, just reset necessary fields
+        # This preserves assigned players across games if desired,
+        # but for a full reset, dropping is fine.
+        # Let's stick to a more controlled reset.
         
-    
-    
-
+        self.mongo_client.liar_decks.game_data.delete_many({
+            "_id": {"$in": [
+                "game_state", "card_pile", "reference_card", "log", 
+                "current_turn_index", "game_winner", "last_play", "player_order"
+            ]}
+        })
+        self.mongo_client.liar_decks.players.drop()
+        # Optionally reset assigned players or manage them in the game logic
+        self.mongo_client.liar_decks.game_data.delete_one({"_id": "assigned_players"})
