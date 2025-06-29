@@ -5,6 +5,7 @@ import os
 
 game = LiarDeckGame()
 
+
 class HttpServer:
     def __init__(self):
         self.sessions = {}
@@ -18,14 +19,14 @@ class HttpServer:
 
     def response(self, kode=404, message='Not Found', messagebody='', headers={}):
         if isinstance(messagebody, dict) or isinstance(messagebody, list):
-             messagebody = json.dumps(messagebody)
+            messagebody = json.dumps(messagebody)
 
         if not isinstance(messagebody, bytes):
             messagebody = messagebody.encode()
 
         if 'Content-Type' not in headers:
             headers['Content-Type'] = 'application/json'
-        
+
         # Add CORS headers to allow requests from any origin
         headers['Access-Control-Allow-Origin'] = '*'
         headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
@@ -48,15 +49,15 @@ class HttpServer:
     def proses(self, data):
         requests = data.split("\r\n")
         baris = requests[0]
-        
+
         body_start_index = data.find('\r\n\r\n') + 4
         body = data[body_start_index:]
-        
+
         j = baris.split(" ")
         try:
             method = j[0].upper().strip()
             object_address = j[1].strip()
-            
+
             # Handle OPTIONS pre-flight request for CORS
             if method == 'OPTIONS':
                 return self.response(204, 'No Content', headers={
@@ -88,7 +89,7 @@ class HttpServer:
             player_id = params.get('player_id')
             if not player_id:
                 # Fallback or error if no player_id is provided
-                state = game.get_game_state(None) # Get a general state / lobby view
+                state = game.get_game_state(None)  # Get a general state / lobby view
             else:
                 state = game.get_game_state(player_id)
             return self.response(200, 'OK', state)
@@ -96,14 +97,14 @@ class HttpServer:
             try:
                 if path == '/':
                     path = '/index.html'
-                
+
                 filepath = 'www' + path
                 with open(filepath, 'rb') as f:
                     content = f.read()
-                
+
                 file_ext = os.path.splitext(filepath)[1]
                 content_type = self.types.get(file_ext, 'application/octet-stream')
-                
+
                 return self.response(200, 'OK', content, {'Content-Type': content_type})
             except FileNotFoundError:
                 return self.response(404, 'Not Found', {"error": "File not found"})
@@ -124,17 +125,17 @@ class HttpServer:
             elif object_address == '/game/start':
                 result = game.start_game()
                 return self.response(200, 'OK', result)
-            
+
             elif object_address == '/game/play':
                 player_id = payload.get("player_id")
                 cards = payload.get("cards")
                 result = game.play_card(player_id, cards)
-                
+
                 if result.get("status") == "ERROR":
                     return self.response(400, 'Bad Request', result)
-                
+
                 return self.response(200, 'OK', result)
-                
+
             elif object_address == '/game/challenge':
                 player_id = payload.get("player_id")
                 result = game.challenge(player_id)
@@ -142,7 +143,7 @@ class HttpServer:
 
             else:
                 return self.response(404, 'Not Found', {"error": "Endpoint not found"})
-        
+
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
